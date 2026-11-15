@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Telegram FlexTime & Overtime Tracker</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Telegram WebApp JS SDK -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #fef9ff;
+            color: #4a4458;
+            -webkit-tap-highlight-color: transparent;
+        }
+        /* Keep native date/time pickers (iOS/Android webviews) from overflowing their containers */
+        #shift-form input[type="date"],
+        #shift-form input[type="time"] {
+            -webkit-appearance: none;
+            appearance: none;
+            display: block;
+            width: 100%;
+            min-width: 0;
+            max-width: 100%;
+            box-sizing: border-box;
+            height: 2.125rem;
+            line-height: 1.25;
+            text-align: left;
+        }
+        #shift-form input[type="date"]::-webkit-date-and-time-value,
+        #shift-form input[type="time"]::-webkit-date-and-time-value {
+            text-align: left;
+            margin: 0;
+        }
+        .tg-card {
+            background-color: #ffffff;
+            border-color: #d4c1ec;
+        }
+        .pastel-bg-peach {
+            background-color: #f2dfd7;
+        }
+        .pastel-bg-lavender {
+            background-color: #d4c1ec;
+        }
+        .pastel-bg-periwinkle {
+            background-color: #9f9fed;
+        }
+        .pastel-bg-violet {
+            background-color: #736ced;
+        }
+        .pastel-text-violet {
+            color: #736ced;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .custom-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="min-h-screen pb-12 select-none flex flex-col items-center">
+
+    <!-- App Main Container -->
+    <div class="w-full max-w-md min-h-screen px-4 pt-4 flex flex-col gap-4">
+
+        <!-- Top Header Bar -->
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <div class="w-10 h-10 rounded-2xl bg-[#d4c1ec]/40 text-[#736ced] flex items-center justify-center font-bold text-xl shadow-sm">
+                    🐾
+                </div>
+                <div>
+                    <h1 class="text-base font-bold leading-tight text-[#736ced]">FlexTime Hub</h1>
+                    <p class="text-xs text-gray-500" id="user-name">Kitten's Sanctuary</p>
+                </div>
+            </div>
+            <!-- Month Selector -->
+            <div class="flex items-center gap-1 bg-[#f2dfd7]/60 border border-[#d4c1ec]/50 px-3 py-1.5 rounded-full text-xs font-semibold text-[#736ced]">
+                <button onclick="changeMonth(-1)" class="text-[#736ced] hover:opacity-75 px-1"><i class="fa-solid fa-chevron-left"></i></button>
+                <span id="current-month-display">Nov 2026</span>
+                <button onclick="changeMonth(1)" class="text-[#736ced] hover:opacity-75 px-1"><i class="fa-solid fa-chevron-right"></i></button>
+            </div>
+        </div>
+
+        <!-- HERO CARD: Flex Balance & Overtime Goal -->
+        <div class="tg-card rounded-3xl p-5 shadow-sm border border-[#d4c1ec] bg-white relative overflow-hidden">
+            <div class="flex justify-between items-start mb-3">
+                <div>
+                    <span class="text-[11px] uppercase tracking-wider text-gray-400 font-bold">Monthly Flex Balance</span>
+                    <div id="flex-balance-container" class="flex items-baseline gap-2 mt-0.5">
+                        <span id="flex-balance-text" class="text-3xl font-extrabold tracking-tight text-[#736ced]">+05:30</span>
+                        <span class="text-xs font-medium text-gray-400">hrs</span>
+                    </div>
+                </div>
+                <div id="flex-badge" class="px-3 py-1 rounded-full text-xs font-bold bg-[#f2dfd7] text-[#736ced] border border-[#d4c1ec]/60 flex items-center gap-1.5 shadow-sm">
+                    <i class="fa-solid fa-cat text-sm"></i> Surplus
+                </div>
+            </div>
+
+            <!-- Overtime Progress Section -->
+            <div class="mt-4 pt-3 border-t border-[#f2dfd7]">
+                <div class="flex justify-between items-center text-xs mb-1.5">
+                    <span class="text-gray-500 font-medium">Monthly Target Progress</span>
+                    <span class="font-bold text-[#736ced]"><span id="total-worked-hrs">112.0</span>h / <span id="target-monthly-hrs">140</span>h</span>
+                </div>
+                <div class="w-full h-3 bg-[#f2dfd7]/70 rounded-full overflow-hidden p-0.5 border border-[#d4c1ec]/40">
+                    <div id="overtime-progress-bar" class="h-full bg-gradient-to-r from-[#9f9fed] to-[#736ced] rounded-full transition-all duration-500" style="width: 80%;"></div>
+                </div>
+                <p class="text-[10px] text-gray-400 mt-1.5 flex justify-between">
+                    <span>Standard: 7.0h/day</span>
+                    <span id="overtime-status" class="font-bold text-[#736ced]">Overtime Qualified 🌸</span>
+                </p>
+            </div>
+        </div>
+
+        <!-- FAST ACTION BAR: Clock In / Out & Manual Add -->
+        <div class="tg-card rounded-2xl p-4 shadow-sm border border-[#d4c1ec] bg-white flex flex-col gap-3">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2.5">
+                    <div id="status-pulse" class="w-3 h-3 rounded-full bg-gray-300 animate-pulse"></div>
+                    <div>
+                        <div id="clock-status-title" class="text-xs font-bold text-gray-700">Not Clocked In</div>
+                        <div id="clock-status-subtitle" class="text-[11px] text-gray-400">Ready to start your 7h shift</div>
+                    </div>
+                </div>
+                <button onclick="openManualModal()" class="w-8 h-8 rounded-xl bg-[#f2dfd7] hover:bg-[#d4c1ec]/60 text-[#736ced] flex items-center justify-center text-xs transition border border-[#d4c1ec]/50">
+                    <i class="fa-solid fa-plus"></i>
+                </button>
+            </div>
+
+            <!-- Big Clock Button -->
+            <button id="clock-btn" onclick="toggleClock()" class="w-full py-3.5 rounded-2xl bg-[#9f9fed] hover:bg-[#736ced] text-white font-bold text-sm shadow-sm transition-all active:scale-[0.98] flex items-center justify-center gap-2 border border-[#736ced]/20">
+                <i class="fa-solid fa-paw text-sm"></i> Clock In Now
+            </button>
+        </div>
+
+        <!-- MONTHLY CALENDAR GRID -->
+        <div class="tg-card rounded-3xl p-4 shadow-sm border border-[#d4c1ec] bg-white flex flex-col gap-3">
+            <div class="flex items-center justify-between px-1">
+                <h2 class="text-sm font-bold text-[#736ced]">Shift Log Calendar</h2>
+                <div class="flex gap-2 text-[10px]">
+                    <span class="flex items-center gap-1 text-gray-500"><span class="w-2.5 h-2.5 rounded-full bg-[#9f9fed]"></span> &gt;7h</span>
+                    <span class="flex items-center gap-1 text-gray-500"><span class="w-2.5 h-2.5 rounded-full bg-[#f2dfd7] border border-[#d4c1ec]"></span> &lt;7h</span>
+                    <span class="flex items-center gap-1 text-gray-500"><span class="w-2.5 h-2.5 rounded-full bg-gray-200"></span> 7h</span>
+                </div>
+            </div>
+
+            <!-- Days of Week Header -->
+            <div class="grid grid-cols-7 text-center text-[11px] font-bold text-[#736ced]/70 pb-1 border-b border-[#f2dfd7]">
+                <div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div>
+            </div>
+
+            <!-- Dynamic Calendar Days Grid -->
+            <div id="calendar-grid" class="grid grid-cols-7 gap-1.5 pt-1 text-center">
+                <!-- Generated via JS -->
+            </div>
+        </div>
+
+        <!-- DAILY DETAILS SHEET (Tapping Calendar Day) -->
+        <div id="daily-detail-sheet" class="hidden tg-card rounded-2xl p-4 shadow-sm border border-[#d4c1ec] bg-[#f2dfd7]/30 flex flex-col gap-2">
+            <div class="flex justify-between items-center border-b border-[#d4c1ec]/50 pb-2">
+                <span id="sheet-date" class="text-xs font-bold text-[#736ced]">Nov 13, 2026 (Friday)</span>
+                <span id="sheet-delta" class="text-xs font-extrabold px-2 py-0.5 rounded-md bg-[#f2dfd7] text-[#736ced] border border-[#d4c1ec]">+01:30 flex</span>
+            </div>
+            <div id="sheet-empty" class="hidden text-xs text-gray-500 py-1">No shift logged for this day.</div>
+            <div id="sheet-stats" class="grid grid-cols-3 gap-2 text-center text-xs pt-1">
+                <div class="bg-white p-2 rounded-xl border border-[#d4c1ec]/40 shadow-2xs">
+                    <div class="text-[10px] text-gray-400">Clock In</div>
+                    <div id="sheet-in" class="font-bold text-gray-700">09:00 AM</div>
+                </div>
+                <div class="bg-white p-2 rounded-xl border border-[#d4c1ec]/40 shadow-2xs">
+                    <div class="text-[10px] text-gray-400">Clock Out</div>
+                    <div id="sheet-out" class="font-bold text-gray-700">06:30 PM</div>
+                </div>
+                <div class="bg-white p-2 rounded-xl border border-[#d4c1ec]/40 shadow-2xs">
+                    <div class="text-[10px] text-gray-400">Net Work</div>
+                    <div id="sheet-net" class="font-bold text-[#736ced]">8.5 hrs</div>
+                </div>
+            </div>
+            <div class="flex gap-2 pt-1">
+                <button id="sheet-edit-btn" onclick="openManualModal(selectedDayKey)" class="flex-1 py-2 rounded-xl bg-[#9f9fed] hover:bg-[#736ced] text-white text-xs font-bold shadow-sm transition flex items-center justify-center gap-1.5">
+                    <i class="fa-solid fa-pen text-[10px]"></i> <span id="sheet-edit-label">Edit Shift</span>
+                </button>
+                <button id="sheet-delete-btn" onclick="deleteShift(selectedDayKey)" class="py-2 px-3 rounded-xl bg-white hover:bg-[#f2dfd7] text-[#736ced] text-xs font-bold border border-[#d4c1ec] transition flex items-center justify-center gap-1.5">
+                    <i class="fa-solid fa-trash text-[10px]"></i> Delete
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- MANUAL TIME EDIT MODAL -->
+    <div id="manual-modal" class="fixed inset-0 bg-black/30 backdrop-blur-xs hidden flex items-end sm:items-center justify-center p-4 z-50">
+        <div class="bg-[#fef9ff] w-full max-w-sm rounded-3xl p-5 shadow-2xl border border-[#d4c1ec] flex flex-col gap-4 animate-in slide-in-from-bottom">
+            <div class="flex justify-between items-center">
+                <h3 id="modal-title" class="text-sm font-bold text-[#736ced]">Add Shift Log</h3>
+                <button onclick="closeManualModal()" class="text-gray-400 hover:text-[#736ced] text-sm"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <form id="shift-form" onsubmit="saveShift(event)" class="flex flex-col gap-3 text-xs">
+                <div>
+                    <label class="block font-semibold text-gray-600 mb-1">Date</label>
+                    <input type="date" id="form-date" required onchange="fillFormForDate(this.value)" class="w-full bg-white border border-[#d4c1ec] rounded-xl px-3 py-2 text-gray-800">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div class="min-w-0">
+                        <label class="block font-semibold text-gray-600 mb-1">Clock In</label>
+                        <input type="time" id="form-in" required class="w-full bg-white border border-[#d4c1ec] rounded-xl px-3 py-2 text-gray-800">
+                    </div>
+                    <div class="min-w-0">
+                        <label class="block font-semibold text-gray-600 mb-1">Clock Out</label>
+                        <input type="time" id="form-out" required class="w-full bg-white border border-[#d4c1ec] rounded-xl px-3 py-2 text-gray-800">
+                    </div>
+                </div>
+                <div>
+                    <label class="block font-semibold text-gray-600 mb-1">Break Time (Minutes)</label>
+                    <input type="number" id="form-break" value="60" min="0" required class="w-full bg-white border border-[#d4c1ec] rounded-xl px-3 py-2 text-gray-800">
+                </div>
+
+                <div class="flex gap-2 pt-2">
+                    <button type="button" onclick="closeManualModal()" class="w-1/2 py-2.5 rounded-xl bg-[#f2dfd7] font-bold text-[#736ced] border border-[#d4c1ec]/50">Cancel</button>
+                    <button type="submit" class="w-1/2 py-2.5 rounded-xl bg-[#9f9fed] hover:bg-[#736ced] text-white font-bold shadow-sm">Save Log</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- JavaScript App Logic -->
+    <script>
+        // Standard work hours per day baseline
+        const DAILY_TARGET_HRS = 7.0;
+        
+        // State variables
+        let currentDate = new Date(2026, 10, 15); // Nov 2026 default
+        let isClockedIn = false;
+        let clockInTime = null;
+        let selectedDayKey = null;
+
+        // Local (not UTC) YYYY-MM-DD key for a Date
+        function toDateKey(d) {
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        }
+
+        function calcNetHours(timeIn, timeOut, breakMins) {
+            const [inH, inM] = timeIn.split(':').map(Number);
+            const [outH, outM] = timeOut.split(':').map(Number);
+            let worked = (outH * 60 + outM) - (inH * 60 + inM);
+            if (worked < 0) worked += 24 * 60; // overnight shift
+            return Math.max(0, (worked - breakMins) / 60);
+        }
+
+        function persistLogs() {
+            localStorage.setItem('flextime_logs', JSON.stringify(shiftLogs));
+        }
+
+        // Mock Storage Setup
+        let shiftLogs = JSON.parse(localStorage.getItem('flextime_logs')) || {
+            "2026-11-09": { in: "09:00", out: "17:00", break: 60, net: 7.0 },
+            "2026-11-10": { in: "08:30", out: "18:00", break: 60, net: 8.5 },
+            "2026-11-11": { in: "09:15", out: "16:45", break: 60, net: 6.5 },
+            "2026-11-12": { in: "08:45", out: "18:15", break: 60, net: 8.5 },
+            "2026-11-13": { in: "09:00", out: "17:30", break: 60, net: 7.5 }
+        };
+
+        // Initialize Telegram WebApp SDK
+        window.Telegram?.WebApp?.ready();
+        window.Telegram?.WebApp?.expand();
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Set User Name if Telegram User exists
+            const user = window.Telegram?.WebApp?.initDataUnsafe?.user;
+            if (user) {
+                document.getElementById('user-name').innerText = user.first_name + "'s Sanctuary";
+            }
+            renderApp();
+        });
+
+        function renderApp() {
+            renderHeaderAndSummary();
+            renderCalendar();
+            renderDaySheet();
+        }
+
+        // Render Balance, Progress & Month Name
+        function renderHeaderAndSummary() {
+            const year = currentDate.getFullYear();
+            const month = currentDate.getMonth();
+            const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+            document.getElementById('current-month-display').innerText = `${monthNames[month]} ${year}`;
+
+            let totalWorked = 0;
+            let totalFlexDelta = 0;
+            let workDaysCount = 0;
+
+            // Calculate monthly totals
+            Object.keys(shiftLogs).forEach(dateKey => {
+                const [logY, logM] = dateKey.split('-').map(Number);
+                if (logY === year && logM - 1 === month) {
+                    const log = shiftLogs[dateKey];
+                    totalWorked += log.net;
+                    totalFlexDelta += (log.net - DAILY_TARGET_HRS);
+                    workDaysCount++;
+                }
+            });
+
+            // Flex Balance UI Update
+            const flexBalanceEl = document.getElementById('flex-balance-text');
+            const flexBadge = document.getElementById('flex-badge');
+            
+            const hours = Math.floor(Math.abs(totalFlexDelta));
+            const mins = Math.round((Math.abs(totalFlexDelta) - hours) * 60);
+            const formattedFlex = `${totalFlexDelta >= 0 ? '+' : '-'}${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+            
+            flexBalanceEl.innerText = formattedFlex;
+            if (totalFlexDelta >= 0) {
+                flexBalanceEl.className = "text-3xl font-extrabold tracking-tight text-[#736ced]";
+                flexBadge.className = "px-3 py-1 rounded-full text-xs font-bold bg-[#f2dfd7] text-[#736ced] border border-[#d4c1ec] flex items-center gap-1.5 shadow-xs";
+                flexBadge.innerHTML = `<i class="fa-solid fa-cat text-sm"></i> Surplus`;
+            } else {
+                flexBalanceEl.className = "text-3xl font-extrabold tracking-tight text-[#9f9fed]";
+                flexBadge.className = "px-3 py-1 rounded-full text-xs font-bold bg-[#f2dfd7]/80 text-[#736ced] border border-[#d4c1ec] flex items-center gap-1.5 shadow-xs";
+                flexBadge.innerHTML = `<i class="fa-solid fa-shield-cat text-sm"></i> Shortage`;
+            }
+
+            // Monthly Target Overtime Progress
+            const targetMonthlyHrs = 140; // Default monthly target
+            document.getElementById('total-worked-hrs').innerText = totalWorked.toFixed(1);
+            document.getElementById('target-monthly-hrs').innerText = targetMonthlyHrs;
+            
+            const progressPct = Math.min((totalWorked / targetMonthlyHrs) * 100, 100);
+            document.getElementById('overtime-progress-bar').style.width = `${progressPct}%`;
+        }
+
+        // Render Calendar Grid
+        function renderCalendar() {
+            const grid = document.getElementById('calendar-grid');
+            grid.innerHTML = '';
+
+            const year = currentDate.getFullYear();
+            const month = currentDate.getMonth();
+
+            const firstDay = new Date(year, month, 1).getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+            // Shift index so Monday is 0 (Sunday is 6)
+            let startingIndex = firstDay === 0 ? 6 : firstDay - 1;
+
+            // Empty padding slots
+            for (let i = 0; i < startingIndex; i++) {
+                grid.appendChild(document.createElement('div'));
+            }
+
+            // Render Day Cells
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const log = shiftLogs[dateKey];
+
+                const cell = document.createElement('button');
+                cell.className = "h-11 rounded-2xl flex flex-col items-center justify-center relative border transition active:scale-95";
+                
+                let badgeColor = "bg-white text-gray-600 border-[#d4c1ec]/30";
+                let dot = "";
+
+                if (log) {
+                    if (log.net > DAILY_TARGET_HRS) {
+                        badgeColor = "bg-[#d4c1ec]/40 text-[#736ced] font-bold border-[#9f9fed]";
+                        dot = `<span class="w-1.5 h-1.5 rounded-full bg-[#736ced] mt-0.5"></span>`;
+                    } else if (log.net < DAILY_TARGET_HRS) {
+                        badgeColor = "bg-[#f2dfd7] text-[#736ced] font-bold border-[#d4c1ec]";
+                        dot = `<span class="w-1.5 h-1.5 rounded-full bg-[#9f9fed] mt-0.5"></span>`;
+                    } else {
+                        badgeColor = "bg-gray-100 text-gray-700 font-bold border-gray-200";
+                        dot = `<span class="w-1.5 h-1.5 rounded-full bg-gray-400 mt-0.5"></span>`;
+                    }
+                }
+
+                cell.className += ` ${badgeColor}`;
+                cell.innerHTML = `<span class="text-xs">${day}</span>${dot}`;
+                if (dateKey === selectedDayKey) cell.className += " ring-2 ring-[#736ced]";
+                cell.onclick = () => selectDay(dateKey);
+
+                grid.appendChild(cell);
+            }
+        }
+
+        // Select Day for Bottom Sheet
+        function selectDay(dateKey) {
+            selectedDayKey = dateKey;
+            renderCalendar();
+            renderDaySheet();
+        }
+
+        function renderDaySheet() {
+            const sheet = document.getElementById('daily-detail-sheet');
+            if (!selectedDayKey) {
+                sheet.classList.add('hidden');
+                return;
+            }
+            const log = shiftLogs[selectedDayKey];
+            const [y, m, d] = selectedDayKey.split('-').map(Number);
+            const dayDate = new Date(y, m - 1, d);
+
+            sheet.classList.remove('hidden');
+            document.getElementById('sheet-date').innerText = dayDate.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric', weekday: 'long' });
+
+            const deltaEl = document.getElementById('sheet-delta');
+            document.getElementById('sheet-empty').classList.toggle('hidden', !!log);
+            document.getElementById('sheet-stats').classList.toggle('hidden', !log);
+            deltaEl.classList.toggle('hidden', !log);
+            document.getElementById('sheet-delete-btn').classList.toggle('hidden', !log);
+            document.getElementById('sheet-edit-label').innerText = log ? 'Edit Shift' : 'Add Shift';
+            if (!log) return;
+
+            document.getElementById('sheet-in').innerText = log.in;
+            document.getElementById('sheet-out').innerText = log.out;
+            document.getElementById('sheet-net').innerText = `${log.net.toFixed(1)} hrs`;
+
+            const delta = log.net - DAILY_TARGET_HRS;
+            if (delta >= 0) {
+                deltaEl.className = "text-xs font-extrabold px-2 py-0.5 rounded-md bg-[#f2dfd7] text-[#736ced] border border-[#d4c1ec]";
+                deltaEl.innerText = `+${delta.toFixed(1)}h flex`;
+            } else {
+                deltaEl.className = "text-xs font-extrabold px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200";
+                deltaEl.innerText = `${delta.toFixed(1)}h flex`;
+            }
+        }
+
+        function deleteShift(dateKey) {
+            if (!dateKey || !shiftLogs[dateKey]) return;
+            if (!confirm('Delete the shift logged for this day?')) return;
+            delete shiftLogs[dateKey];
+            persistLogs();
+            renderApp();
+        }
+
+        // Fast Clock In / Out Toggle
+        function toggleClock() {
+            isClockedIn = !isClockedIn;
+            const btn = document.getElementById('clock-btn');
+            const pulse = document.getElementById('status-pulse');
+            const title = document.getElementById('clock-status-title');
+            const subtitle = document.getElementById('clock-status-subtitle');
+
+            if (isClockedIn) {
+                clockInTime = new Date();
+                btn.className = "w-full py-3.5 rounded-2xl bg-[#736ced] hover:bg-[#9f9fed] text-white font-bold text-sm shadow-sm transition-all active:scale-[0.98] flex items-center justify-center gap-2 border border-[#736ced]/20";
+                btn.innerHTML = `<i class="fa-solid fa-cat text-sm"></i> Clock Out Now`;
+
+                pulse.className = "w-3 h-3 rounded-full bg-[#736ced] animate-ping";
+                title.innerText = "Shift Active";
+                subtitle.innerText = `Clocked in at ${clockInTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+            } else {
+                // Auto save shift on clock out
+                const now = new Date();
+                const dateKey = toDateKey(clockInTime || now);
+                const inStr = clockInTime ? clockInTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false}) : "09:00";
+                const outStr = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false});
+
+                shiftLogs[dateKey] = { in: inStr, out: outStr, break: 60, net: calcNetHours(inStr, outStr, 60) };
+                persistLogs();
+
+                btn.className = "w-full py-3.5 rounded-2xl bg-[#9f9fed] hover:bg-[#736ced] text-white font-bold text-sm shadow-sm transition-all active:scale-[0.98] flex items-center justify-center gap-2 border border-[#736ced]/20";
+                btn.innerHTML = `<i class="fa-solid fa-paw text-sm"></i> Clock In Now`;
+
+                pulse.className = "w-3 h-3 rounded-full bg-gray-300 animate-pulse";
+                title.innerText = "Not Clocked In";
+                subtitle.innerText = "Shift logged successfully!";
+
+                renderApp();
+            }
+        }
+
+        function changeMonth(direction) {
+            currentDate.setMonth(currentDate.getMonth() + direction);
+            renderApp();
+        }
+
+        function openManualModal(dateKey) {
+            const key = dateKey || toDateKey(new Date());
+            document.getElementById('form-date').value = key;
+            fillFormForDate(key);
+            document.getElementById('manual-modal').classList.remove('hidden');
+        }
+
+        // Prefill the form with an existing log for the chosen date (if any)
+        function fillFormForDate(dateKey) {
+            const log = shiftLogs[dateKey];
+            document.getElementById('form-in').value = log ? log.in : '';
+            document.getElementById('form-out').value = log ? log.out : '';
+            document.getElementById('form-break').value = log ? (log.break ?? 60) : 60;
+            document.getElementById('modal-title').innerText = log ? 'Edit Shift Log' : 'Add Shift Log';
+        }
+
+        function closeManualModal() {
+            document.getElementById('manual-modal').classList.add('hidden');
+        }
+
+        function saveShift(event) {
+            event.preventDefault();
+            const date = document.getElementById('form-date').value;
+            const timeIn = document.getElementById('form-in').value;
+            const timeOut = document.getElementById('form-out').value;
+            const breakMins = parseInt(document.getElementById('form-break').value, 10);
+
+            shiftLogs[date] = { in: timeIn, out: timeOut, break: breakMins, net: calcNetHours(timeIn, timeOut, breakMins) };
+            persistLogs();
+            selectedDayKey = date;
+
+            closeManualModal();
+            renderApp();
+        }
+    </script>
+</body>
+</html>
